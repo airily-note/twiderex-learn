@@ -1,0 +1,55 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+buildscript {
+    apply from: 'versions.gradle'
+    repositories {
+        mavenCentral()
+//        jcenter()
+        google()
+        maven { setUrl("https://www.jitpack.io") }
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.0.0-alpha08'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$versions.kotlin"
+    }
+}
+
+plugins {
+    id 'com.diffplug.spotless' version '5.6.1'
+}
+
+subprojects {
+    repositories {
+        mavenCentral()
+//        jcenter()
+        google()
+        maven { setUrl("https://www.jitpack.io") }
+    }
+
+    apply plugin: 'com.diffplug.spotless'
+    spotless {
+        kotlin {
+            target '**/*.kt'
+            targetExclude("$buildDir/**/*.kt")
+            targetExclude('bin/**/*.kt')
+
+            ktlint(versions.ktlint)//.userData([android: "true"])
+            licenseHeaderFile rootProject.file('spotless/license.kt')
+        }
+        java {
+            target '**/*.java'
+            targetExclude("$buildDir/**/*.java")
+            targetExclude('bin/**/*.java')
+
+            licenseHeaderFile rootProject.file('spotless/license.kt')
+        }
+    }
+
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
+        kotlinOptions {
+            allWarningsAsErrors = true
+            freeCompilerArgs += '-Xopt-in=kotlin.RequiresOptIn'
+            freeCompilerArgs += '-Xallow-unstable-dependencies'
+            jvmTarget = "1.8"
+        }
+    }
+}

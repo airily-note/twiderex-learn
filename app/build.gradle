@@ -1,0 +1,223 @@
+buildscript {
+    ext {
+        enableGoogleVariant = project.file('google-services.json').exists()
+    }
+    repositories {
+        mavenCentral()
+//        jcenter()
+        google()
+        maven { setUrl("https://www.jitpack.io") }
+    }
+
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$versions.kotlin"
+        classpath "com.google.dagger:hilt-android-gradle-plugin:$versions.hilt"
+        if (enableGoogleVariant) {
+            // START Non-FOSS component
+            classpath 'com.google.gms:google-services:4.3.4'
+            classpath 'com.google.firebase:firebase-crashlytics-gradle:2.4.1'
+            // END Non-FOSS component
+        }
+    }
+}
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id "org.jetbrains.kotlin.kapt"
+    id "com.google.protobuf" version "0.8.14"
+    id "org.jetbrains.kotlin.plugin.serialization" version "1.4.30"
+}
+
+if (enableGoogleVariant) {
+    // START Non-FOSS component
+    apply plugin: 'com.google.gms.google-services'
+    apply plugin: 'com.google.firebase.crashlytics'
+    // END Non-FOSS component
+}
+apply plugin: 'dagger.hilt.android.plugin'
+
+android {
+    compileSdkVersion global.compileSdkVersion
+    buildToolsVersion global.buildToolsVersion
+
+    defaultConfig {
+        applicationId "com.twidere.twiderex"
+        minSdkVersion global.minSdkVersion
+        targetSdkVersion global.targetSdkVersion
+        versionCode global.versionCode
+        versionName global.versionName
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments += ["room.schemaLocation": "$buildDir/schemas".toString()]
+            }
+        }
+        def apiKeyProperties = rootProject.file('apiKey.properties')
+        def hasApiKeyProps = apiKeyProperties.exists()
+        if (hasApiKeyProps) {
+            Properties apiKeyProp = new Properties()
+            apiKeyProp.load(apiKeyProperties.newInputStream())
+            buildConfigField "String", "CONSUMERKEY", apiKeyProp.get("ConsumerKey")
+            buildConfigField "String", "CONSUMERSECRET", apiKeyProp.get("ConsumerSecret")
+        }
+
+    }
+
+    lintOptions{
+        disable 'MissingTranslation'
+
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    flavorDimensions 'channel'
+    productFlavors {
+        if (enableGoogleVariant) {
+            // START Non-FOSS component
+            google {
+                dimension 'channel'
+            }
+            // END Non-FOSS component
+        }
+        fdroid {
+            dimension 'channel'
+        }
+    }
+
+    def file = rootProject.file('signing.properties')
+    def hasSigningProps = file.exists()
+
+    signingConfigs {
+        if (hasSigningProps) {
+            twidere {
+                Properties signingProp = new Properties()
+                signingProp.load(file.newInputStream())
+                storeFile = rootProject.file(signingProp.get('storeFile'))
+                storePassword = (String) signingProp.get('storePassword')
+                keyAlias = (String) signingProp.get('keyAlias')
+                keyPassword = (String) signingProp.get('keyPassword')
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (hasSigningProps) {
+                signingConfig signingConfigs.twidere
+            }
+        }
+        release {
+            if (hasSigningProps) {
+                signingConfig signingConfigs.twidere
+            }
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    sourceSets.each {
+        it.res.srcDirs += project.files("src/${it.name}/res-localized")
+        it.java.srcDirs += "src/${it.name}/kotlin"
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+        useIR = true
+    }
+    buildFeatures {
+        compose true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion versions.compose
+    }
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:$versions.protobuf"
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {
+                    option "lite"
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:$versions.kotlinx_serialization"
+
+    implementation project(":services")
+
+    implementation "androidx.compose.ui:ui:$versions.compose"
+    implementation "androidx.compose.ui:ui-tooling:$versions.compose"
+    implementation "androidx.compose.foundation:foundation:$versions.compose"
+    implementation "androidx.compose.animation:animation:$versions.compose"
+    implementation "androidx.compose.material:material:$versions.compose"
+    implementation "androidx.compose.material:material-icons-core:$versions.compose"
+    implementation "androidx.compose.material:material-icons-extended:$versions.compose"
+    implementation "androidx.compose.runtime:runtime-livedata:$versions.compose"
+    androidTestImplementation "androidx.compose.ui:ui-test:$versions.compose"
+
+    implementation "androidx.paging:paging-runtime-ktx:$versions.paging"
+    implementation "androidx.paging:paging-compose:$versions.androidx_compose"
+    implementation "androidx.navigation:navigation-compose:$versions.androidx_compose"
+    implementation "androidx.navigation:navigation-fragment-ktx:$versions.navigation"
+    implementation "androidx.activity:activity-ktx:$versions.androidx"
+    implementation "androidx.activity:activity-compose:$versions.androidx"
+    implementation "androidx.datastore:datastore:$versions.dataStore"
+
+    implementation "com.google.dagger:hilt-android:$versions.hilt"
+    kapt "com.google.dagger:hilt-android-compiler:$versions.hilt"
+    implementation "androidx.hilt:hilt-lifecycle-viewmodel:$versions.androidx_hilt"
+    implementation "androidx.hilt:hilt-navigation:$versions.androidx_hilt"
+    implementation "androidx.hilt:hilt-work:$versions.androidx_hilt"
+    kapt "androidx.hilt:hilt-compiler:$versions.androidx_hilt"
+
+    implementation "androidx.room:room-runtime:$versions.room"
+    kapt "androidx.room:room-compiler:$versions.room"
+    implementation "androidx.room:room-ktx:$versions.room"
+
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:$versions.lifecycle"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$versions.lifecycle"
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:$versions.lifecycle"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-savedstate:$versions.lifecycle"
+    implementation "androidx.lifecycle:lifecycle-common-java8:$versions.lifecycle"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-compose:$versions.lifecycle_compose"
+
+    implementation "androidx.work:work-runtime-ktx:$versions.work"
+
+    implementation "dev.chrisbanes.accompanist:accompanist-glide:$versions.accompanist"
+    implementation "dev.chrisbanes.accompanist:accompanist-insets:$versions.accompanist"
+
+    implementation "com.twitter.twittertext:twitter-text:3.1.0"
+    implementation 'org.jsoup:jsoup:1.13.1'
+
+    debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.6'
+
+    implementation "com.google.protobuf:protobuf-javalite:$versions.protobuf"
+
+    implementation "com.google.android.exoplayer:exoplayer:$versions.exoplayer"
+
+    if (enableGoogleVariant) {
+        // START Non-FOSS component
+        googleImplementation platform('com.google.firebase:firebase-bom:26.1.0')
+        googleImplementation 'com.google.firebase:firebase-analytics-ktx'
+        googleImplementation 'com.google.firebase:firebase-crashlytics-ktx'
+        // END Non-FOSS component
+    }
+
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+}
+
+apply from: 'translate.gradle'
